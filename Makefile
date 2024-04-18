@@ -19,9 +19,9 @@ endif
 
 .PHONY: all all-dev clean distclean dist thesis viewthesis doc viewdoc cls check save test FORCE_MAKE
 
-thesis: $(THESIS).pdf
+all: thesis clean
 
-all: thesis
+thesis: $(THESIS).pdf
 
 all-dev: doc all
 
