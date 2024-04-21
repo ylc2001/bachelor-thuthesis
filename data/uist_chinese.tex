@@ -1,0 +1,832 @@
+% !TeX root = ../main.tex
+
+
+\section{Introduction}
+
+随着AI和IoT技术的发展，智能系统拥有越来越强大的情境感知能力。
+以智能手机为例，它能够通过感知用户的地点、活动、APP等物理情境和联系人、消息等社会情境，来为用户提供智能自动化服务。
+情境感知应用面对的是各不相同的用户场景、设备和用户偏好，开发者并不能预见用户每一种可能的情境并做针对性适配。
+同时，数据驱动的机器学习算法在面对稀疏的个性化情境时也需要较长的时间才能学习用户偏好。
+这些方法没有有效地involve终端用户，将其个性化知识利用到情境感知应用的构建中。
+
+为了让终端用户参与个性化系统的构建，目前最流行的paradigm是Trigger Action Programming (TAP)，让用户自己定制IF-THEN规则。
+然而这种方法仍然对终端用户存在门槛，终端用户在缺少对设备感知能力的了解的情况下难以构建他们心中所意图的个性化情境\cite{ur_practical_2014,ur_trigger-action_2016,corno_high-level_2019}。
+% 终端用户会使用更high-level的、user-centeric的概念来思考和描述情境。
+而机器对情境low-level的结构化表示（例如多个情境detectors构成的布尔表达式）来判断情境。
+There is a significant gap between between human and machine in understanding of how contexts are constructed.
+
+% 跟题目和摘要对应
+To bridge this human-machine context gap in terms of building personalized applications，我们参考用户与人类助手在情境内沟通的情况，investigate a collaborative approach.
+机器助手与用户在情境内（例如用户在运动时配置与运动有关的情境规则）通过自然语言对话，不断align他们对情境的理解。
+这种方法与情境外方法（例如用户在家里放松时配置运动相关的情境规则）不同，用户往往更容易在情境内表达自己的需求，也会根据情境来调整自己的表达方式。
+Through our formative study, we identify several challenges that arise from realizing this collaborative process.
+% 根据challenges的结果调整
+例如，机器需要有效处理用户输入语言中的ambiguity和omission of context information，同时需要提供对用户可理解的界面。
+
+We propose LangAware that addresses the aforementioned challenges and enables end-users to establish contextual rules in-situ using natural language.
+考虑到large language models (LLMs) 所具备的强大 natural language understanding 能力和所蕴含的通用知识，LangAware leverages LLMs 在语义上打通用户所表达的高级情境概念与机器所能感知和实现的底层传感能力，并基于我们所提出的Shared Contextual Concepts，来有效构建可理解的用户交互界面。
+A Shared Contextual Concepts (SCC) 是一个natural language phrase及其所对应的机器boolean expression所构成的pair，它是人机之间情境理解对齐的媒介。
+LangAware的一个具体使用例子如图\ref{fig:teaser}所示，a user来到操场跑步，他戴上耳机听音乐，但耳机中时常传来消息提醒让他很烦恼。他向助手表达：\quotes{Stop interrupting me except for private messages.} 助手结合手机上的情境信息理解用户语言输入，生成候选的SCCs，其中既包括从语言得到的\quotes{non-private notifications}，也包括从情境信息得到的\quotes{running in the playground}等。
+用户在可交互界面上选择SCC，或者进一步通过自然语言对话来修改，直到生成满意的个性化情境规则。
+
+% TODO：这句话放后面，例如future work里提支持其他平台
+% 针对一个定义好情境detectors和服务API的情境感知系统，我们的方法能够生成机器可解析执行的情境规则。
+
+To evaluate LangAware，我们在real-life settings下开展了16个被试的用户实验，覆盖12个校园情境任务。
+我们让用户同时使用安卓手机上实现的LangAware和Baseline，定义个性化情境规则。
+实验结果显示，用户可以使用LangAware以88\%（比Baseline提升了19\%）的准确率生成高质量SCC（平均专家充分性打分4.41/5，必要性打分4.37/5）。
+用户在collaboration过程中有82\%的修改属于界面点击而非自然语言对话，且在所有的情境任务中，有82\%的任务在2次修改以内完成。
+与Baseline相比，LangAware的界面修改占比更高，在用户满意度、机器理解能力、mental effort、physical demand等多个主观打分指标中显著更优，证明了引入即时情境数据对构建个性化情境的效果。
+同时，实验过程中LangAware生成的SCC也在用户表达、传感器组合方式等多个方面体现出个性化特点。
+此外，用户汇报与LangAware交互之后增进了对机器能力的理解。
+
+To conclude，我们的贡献是提出了LangAware，a collaborative approach for constructing personalized context in-situ using natural language.
+这个方法面向human-machine context gap，利用LLM在语义上连接自然语言和情境传感器detectors，基于SCC来构建可理解的对话界面，允许终端用户effectively通过自然语言创造和修改情境表达式，生成情境规则。
+This work对基于IoT场景的个性化交互具有重要意义。
+
+\section{Background and Related Work}
+
+This paper 面向情境感知应用的背景，探索终端用户参与定义个性化情境的方法。
+因此，在这个section我们review情境感知系统、终端用户情境构建的有关工作，并在最后介绍LLM如何在打通情境语义这一任务上非常promising。
+
+\subsection{Context-Aware Systems}
+
+情境感知系统能够根据用户的情境来提供定制服务\cite{dey_understanding_2001}。
+随着IoT和AI技术的发展，智能设备能够更好地利用时间、地点、activity、APP使用情况、附近的WiFi和蓝牙设备等物理传感信息和联系人、消息内容中蕴含的社会信息来识别和描述用户的情境。
+利用丰富的情境信息，情境感知系统能够提供丰富的自动化服务，
+例如推荐系统\cite{villegas_characterizing_2018}，
+消息管理\cite{li_alert_2022,mehrotra_prefminer_2016,hyungik_oh_intelligent_2015,pielot_beyond_2017}，
+来电管理\cite{khalil_context-aware_2005}，
+APP推荐\cite{chen_cap_2019}，
+手机功耗管理\cite{lee_context-aware_2016,qi_context-aware_2013}，
+音量和亮度等配置管理\cite{ambeth_kumar_active_2020,abeywardhane_optimization_2018}，
+等等。
+
+大量工作采用数据驱动的机器学习方法来学习用户的情境偏好\cite{rashidi_keeping_2009,aztiria_discovering_2012}，但这些方法在面向个性化情境时存在诸多问题。
+首先，这些系统都需要较为大量的用户情境数据，例如数周、数月的数据积累\cite{mehrotra_prefminer_2016,zhang_trace2tap_2020,zhu_mining_2015,srinivasan_mobileminer_2014}。
+尤其是当用户的个性化情境和行为数据较为稀疏、不同用户间差异较大难以知识共享时，仅从行为数据中获得个性化知识的效率很低。
+% 第二个方面
+其次，许多情境感知系统对用户而言是黑盒AI，终端用户有时较难理解系统的行为，也难以参与控制\cite{amershi_guidelines_2019,yang_learning_2013,barkhuus_is_2003,dey_support_2009}。
+例如iOS设备上的Focus模式可以视作一个情境感知应用，它的trigger包括Smart Activation。
+终端用户在它不正常工作时，并不能很好地了解原因，也没有直接的方式去进行调整，除非通过在合适的时间手动开关以教授其背后的学习模型。
+因此，让用户有效参与到情境偏好学习过程中是必要的，让用户提供必要的个性化知识，以及让用户对系统有更多的理解和控制。
+
+
+\subsection{End User Context Construction}
+
+很多工作都在研究如何让终端用户参与情境感知系统的构建，让他们根据自己的情境需要定制系统\cite{lieberman_end-user_2006}。
+终端用户大多没有编程背景，因此需要降低终端用户的编程门槛。
+一个重要的paradigm是Trigger-action programming (TAP) ，即 IF an event happens, THEN take actions。
+研究表明终端用户大多数情况下用IF-THEN规则的方式来表达自己的情境需求\cite{dey_icap_2006}，同时用户在智能空间里的需求能够被TAP规则所表达\cite{ur_practical_2014}。
+诸多商业平台也都采用TAP，例如
+IFTTT\cite{ifttt_ifttt_2023}。
+% Microsoft Power Automate (formerly known as Microsoft Flow)\cite{microsoft_microsoft_2023}, 
+% Apple Shortcuts, 
+% Samsung SmartThings, 
+% OpenHAB, 
+% Zapier\cite{zapier_zapier_2023}, 
+% Home Assistant, 
+% Ripple, 
+% Mozilla’s Things Gateway, 
+% Stringify, 
+% SmartRules, 
+% NinjaBlocks, 
+% 等等。
+
+% empirical研究表明在IFTTT这样的平台上，终端用户有能力定义多样的个性化的情境规则\cite{mi_empirical_2017,ur_trigger-action_2016}。
+
+然而，TAP编程仍然对终端用户有门槛。
+其中一个重要问题是，TAP规则中仍然涉及到较多的底层机器细节，尤其是当情境感知的IoT系统中包含越来越多的传感器和服务时，终端用户需要提前了解并找到这些机器能力来组合成自己的情境，这给终端用户编写规则制造了困难\cite{ur_practical_2014,ur_trigger-action_2016,corno_high-level_2019}。
+% 另一方面终端用户对TAP规则的执行理解不足，会编写出含有bug的规则\cite{huang_supporting_2015,brackenbury_how_2019,manca_supporting_2019}。
+% 这些都使得终端用户在现有的TAP界面下难以有效地表达自己的情境需求。
+为了解决上述问题， 一些工作提出对机器情境感知进行更高层抽象来支持终端用户更好地构建个性化情境，定义IF-THEN规则。
+例如，提供更好的视觉编程环境来引导用户构建规则\cite{ghiani_personalization_2017,desolda_empowering_2017}，但这些方法仍然需要用户以较高的学习成本在GUI上浏览，在了解系统所支持情境感知能力后构建个性化情境。
+此外，也有工作\cite{louie_affinder_2022}提出了block-based编程环境来专门支持设计者开发 location-based 情境感知应用，将人类概念翻译为机器feature表达式。
+其他工作\cite{corno_high-level_2019,corno_heytap_2020,corno_users_2021}允许用户输入自然语言指令，系统推荐符合其中抽象概念的TAP规则集合；
+但这些方法用到了专家针对特定平台（i.e. IFTTT）分析并提前总结定义好的语义ontology来将用户的抽象概念转换为具体机器语义，不具有可扩展性。
+此外，以上工作基本在out of context的情况下考虑情境构建，而没有考虑用户在情境中创建的情况。
+
+相比而言，我们的工作面向没有专业知识的终端用户，考虑用户在真实场景内构建个性化情境。
+我们的工作同时考虑自然语言输入和情境信息，使用户交互方式更加自然、学习成本更低。
+同时我们利用LLM的NLU能力和所蕴含通用知识完成语义的连接，instead of 专家针对特定平台定义语义网络，扩展性和灵活性更强。
+
+
+\subsection{Large Language Models}
+
+
+% transformer\cite{vaswani_attention_2017}
+% BERT\cite{devlin_bert_2019}
+% T5\cite{raffel_exploring_2020}
+% GPT\cite{radford_improving_2018}
+% GPT-2\cite{radford_language_2019}
+% GPT-3\cite{brown_language_2020}
+% LaMDA\cite{thoppilan_lamda_2022}
+% PaLM\cite{chowdhery_palm_2022}
+% InstructGPT\cite{ouyang_training_2022}
+% ChatGPT\cite{openai_introducing_2022}
+% ChatGPT API\cite{brockman_introducing_2023}
+
+
+语言模型对文本序列的概率进行建模，而生成式语言模型基于给定的输入预测更有可能的输出序列。
+随着近期基于transformer的语言模型\cite{vaswani_attention_2017}的参数量和文本数据训练量的不断增加，
+例如GPT-3\cite{brown_language_2020}，LaMDA\cite{thoppilan_lamda_2022}，PaLM\cite{chowdhery_palm_2022}，ChatGPT\cite{openai_introducing_2022} 这类so called large language models (LLM) 逐渐涌现出了ability to generalize across new tasks without re-training the models.
+用户需要精心编写自然语言指令，或者叫prompts，来让LLM按要求完成所需要的任务。
+Prompting既可以提供few-shot examples，也可以仅提供任务描述而没有example。
+LLM对众多新任务的出色表现表明，它在学习巨大量语料的同时将语言中丰富的语义知识embed到模型内，而prompting的过程就是将LLM中的知识extract出来。
+
+LLM对人机交互提供了新的机遇\cite{bommasani_opportunities_2022}。
+LLM能够handle终端用户的丰富多样的自然语言表达，更准确地理解他们的意图，允许用户在缺少专业知识的情况下更容易地构建他们的AI应用。
+同时，LLM内部蕴含的丰富知识能够支持它作为多种模态数据的粘合剂，LLM可以利用其他模态的数据来增强LLM对于情境理解，并更好的执行任务\cite{mialon_augmented_2023}。
+
+本文通过LLM来将用户的自然语言翻译为机器表达式，同时也利用它从机器表达式中抽象出用户可理解的概念，降低终端用户构建个性化情境的门槛。
+通过将情境感知数据输入LLM，能够让LLM更有效地理解用户所在情境、理解用户的自然语言，辅助决策生成合理情境规则。
+
+
+\section{The Human-Machine Context Gap}
+% \section{The Problem of End User Context Collaboration}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{figures/problem4.pdf}
+    % \hspace{1em}
+    % \hfill
+    % \includegraphics[width=0.48\linewidth]{figures/personalized_cas.pdf}
+    \caption{The Human-Machine Context Gap.}
+    \label{fig:problem}
+\end{figure}
+
+人与情境感知系统对情境如何构建的理解存在gap，如图\ref{fig:problem}所示。
+首先在感知通道上，人的感官与机器的传感器便不同，人与机器所能收集到的输入信息存在差异。
+同时，人往往通过一些概念来理解情境，这些概念既可能是比较高级的、抽象的（例如“在工作”），也可能是底层的、具体的（例如“在办公室”），概念与概念之间并非完全独立的关系。
+然而，机器通过结构化定义的情境变量和服务接口来构成情境规则，其语义明确，可以组合为复杂的情境表达式和服务链条。
+用户在将自己的需求表达为情境-服务规则时，往往面临着对机器能力理解不足、从机器规则难以准确预期效果等问题，缺乏将自己的非结构化需求转化为结构化机器规则的专业知识。
+机器在从情境数据学习时，也往往无法有效总结情境-服务中的高级因果关系，只能以相对low-level的具体规则来向用户展示。
+这种human-machine context gap，阻碍了用户向机器传递个性化知识。
+
+% TODO：引用相关工作
+% 举例子，一个是用户对机器能力的理解不够全面，另一个是从读机器规则的方面无法想象其实际效果
+% 例如，如果手机拥有对音量进行自动控制的能力，用户可以编写情境规则将晚上睡觉时间段的音量静音。然而，用户仍然需要
+% 例如，假如手机拥有对用户消息进行管理的能力，根据消息来源APP自动免打扰不提醒，但终端用户可能会遇到某个APP（例如外卖）中的消息需要临时开启的情况。这种情境需求意味着用户
+
+为了弥合这个gap，我们认为需要提出用户与机器交互的有效方法。
+用户在与人类助手沟通时主要使用自然语言来表达，且往往处在具体情境时更容易想到、表达自己的需求。
+考虑到这种特点，我们研究人与机器助手在情境内通过自然语言交互的方式，在互相沟通中生成情境规则。
+为探究终端用户在日常生活情境中会如何向机器助手表达情境偏好、协作生成规则，我们开展了面向手机情境自动化任务的formative study，从中总结这种方法解决human-machine context gap的挑战，指导后续的系统设计。
+
+% 终端用户与机器助手沟通情境偏好的表达方式可能会受所处情境的影响。
+
+\subsection{Study Design}
+
+我们设计了一个Wizard of Oz实验，在实验室环境中请被试假想情境，并和背后由人类wizard操纵的手机智能助手对话。
+wizard由具有开发情境感知系统专业知识的人来担任。
+
+6名paricipants （5男1女，ages from 22 to 25）参与了我们的实验。
+每个参与者完成实验用时40min-1h。
+我们给每位参与者提供了实验补偿。
+我们询问参与者是否有类似于IFTTT等TAP编程的经验，有3个人表示曾在手机上设置过自动化规则，其他人表示了解但没用过。
+
+实验流程如下。
+我们先向参与者介绍实验背景，假想一个智能手机助手，它同时具有较为完整的情境感知能力（列举时间、地点、APP、activity、环境噪音、消息和联系人等信息）和类似于人类一样的理解能力。
+我们请参与者假想自己在设定的任务情境中，向助手表达偏好，指定个性化情境规则，以便以后助手遇到配置情境时自动执行服务。
+我们按随机顺序向用户介绍提前设计好的启发式情境需求例子，并首先询问用户是否理解该情境、是否生活中会遇到类似的情况。
+如果用户认为这个情境需求不够恰当，他可以向实验者描述更好的例子。
+对情境需求理解无误后，参与者在即时通讯APP的聊天界面，通过文本消息或语音消息的方式与助手沟通，而wizard通过文本消息的方式模拟助手的回复。
+每个任务结束后，参与者对该轮对话提供comments。
+每个参与者进行4-6个情境任务，全部结束后进行简单访谈。
+
+实验的任务如下。我们提前设计了实验室工作、图书馆学习、操场运动和宿舍休息四类情境和每个情境中的若干条可能的自动化需求，例如消息管理、日程管理、音量控制、网络切换等，作为启发式的例子。
+每一类情境都配备有时间、地点文本描述和一张背景照片，而每一个情境需求都伴随着一个较为具体的故事叙事。
+我们请被试在所设计的启发式例子，或在他们自己想到的情境例子中，与智能助手沟通以配置情境自动化规则。
+wizard需要同时考虑用户所表达的自然语言和手机上可以感知到的情境信息，生成在智能手机上可实现的情境规则（IF conditions are true, THEN take actions），并以终端用户尽可能理解的自然语言反馈给用户。
+
+\subsection{Findings}
+
+\begin{table*}
+  % \caption{Challenges of bridging human-machine context gap using natural language within contexts}
+  \caption{Challenges in Natural Language-based Human-Machine Context Bridging.}
+  \label{tab:challenges}
+  % \begin{tabular}{p{0.25\linewidth}p{0.3\linewidth}p{0.39\linewidth}}
+  \begin{tabular}{p{0.25\linewidth}p{0.7\linewidth}}
+  % \begin{tabular}{ccl}
+    % \toprule
+    % \textbf{Type} & \textbf{Description} & \textbf{Examples} \\
+    % \midrule
+    % 不完备的表达 & 用户表达的信息是不充分的，尤其是会省略情境中的信息（cause） &  暂时停止显示所有无关消息(暂停到什么时候？)\\
+    % high-level abstraction of concepts & 用户为中心的概念而非机器为中心的表达 & \\
+    % extra interaction needed & 用户需要在交互中确认和修正 & \\
+    % lack of support & 机器不能支持用户想要的功能 & \\
+    % \bottomrule
+
+
+% \toprule
+% Flow                             & Type                            & Description                                                                                                                   & Examples \\
+% \midrule
+% \multirow{2}{*}{User to Machine} & Ambiguous expressions           & User-centered abstract concepts are not very easy to be decomposed into machine expressions.                                  &          \\
+%                                  & Incomplete expressions          & The information expressed by the user is insufficient, especially in terms of omitting contextual information.                &          \\
+% Machine to User                  & Cropped semantics               & Machine executable rules may cut off meanings conveyed by users, usually because of lacking support.                          &          \\
+% Bi-directional                   & Queries and modification needed & Users need both natural language explainations and modification controls of generated rules, in a multi-turn interacting way. &         \\
+% \bottomrule
+
+
+
+% \toprule
+% \textbf{Type}          & \textbf{Description}                                                                                                           & \textbf{Examples} \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{User Utterance}}                                                                                                                                 \\
+% Ambiguity              & User-centered concepts are not very easy to decompose into machine expressions.                                                &                   \\
+% Incomplete Information & Words expressed by the user is insufficient, especially omitting contextual information.                                       &                   \\
+% Varying Expressions    & Users express the same intent in different ways, requiring the system to understand diverse language patterns.                 &                   \\
+% Implied Intent         & Users imply their intent rather than explicitly stating it, making it challenging for the system to take appropriate action.   &                   \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{System Output}}                                                                                                                                  \\
+% Inadequate Feedback    & The system provides unclear, insufficient, or overly technical feedback, confusing the user or failing to address their needs. &                   \\
+% Cropped Semantics      & The system may crop or misinterpret semantics conveyed by users, usually due to lacking specific abilities.                    &                   \\
+% Trust and Reliability  & Users might be hesitant to trust the system, questioning its reliability and ability to perform tasks accurately.              &                  \\
+% \bottomrule
+
+
+
+% \toprule
+% \textbf{Targeting Problem}          & \textbf{Description}                                                                                                           & \textbf{Examples} \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{User Input}}                                                                                                                                 \\
+% Ambiguity              & Users provide ambiguous or unclear instructions, which are difficult to be accurately interpreted into machine rules.                                                &     "上班的时候" 上班可能包含在办公室，也可能包含在工作时间；“不要打扰我”，可能包括静音、消息免打扰              \\
+% Incomplete Information & Users do not provide sufficient information, especially omitting contextual information.                                       &      用户只说"静音"，但实际指的是在当下教室的情况下静音             \\
+% Varying Expressions    & Users express the same intent in different ways, requiring the system to understand diverse language patterns.                 &       "在我运动的时候别让音乐播放被打断" v.s. "边运动边听音乐时不能被打扰"；"如果我在开会，不提醒微信消息" v.s. "如果收到微信时我在开会，就屏蔽"          \\
+% % % Implied Intent         & Users imply their intent rather than explicitly stating it, requiring additional inference.   &      A user said "the network is too slow for gaming", implying to switch networks             \\
+% % \midrule
+% % \multicolumn{3}{l}{\textbf{System Output}}  \\
+% % 反馈与用户预期不符 & 需要让用户了解系统做不到 & \\
+% % 机器需要找到相近的表达式 & SCC & \\
+% % Failure on & 利用通用知识把语言映射到相近的语言表达式  & \\
+% % Inconsistent Semantics      & The generated rule is inconsistent with the user's original language semantics due to constraints in the system's capabilities.                    &        "当我周围有人时，把扬声器静音"会被解析为周围蓝牙手机设备数>0时静音。           \\
+% % Constrained Language Interpretation      & The interpreted rule may deviate from the user's original meaning due to constraints in the system's capabilities.                    &        "当我周围有人时，把扬声器静音"会被解析为周围蓝牙手机设备数>0时静音。           \\
+% Inaccurate Results    & 需要有用户修改的能力。The system infers inaccurate context conditions from sensor detector data. &    系统根据当前情境推荐了"跑步时屏蔽私戳消息"，但用户不需要"跑步"的条件；用户未表达但需要戴耳机的条件，但系统未生成这一条件。               \\
+% % Inaccurate Context Inference    & The system uses sensor detector data to infer extra context conditions that are not relevant to users' needs, or misses relevant ones. &    系统根据当前情境推荐了"跑步时屏蔽私戳消息"，但用户不需要"跑步"的条件；用户未表达但需要戴耳机的条件，但系统未生成这一条件。               \\
+% Insufficient Explanation  & SCC做得到，或做不到的解释。The system may lack the ability to provide user-friendly explanations of generated rules or failures.             &      用户在输入后会询问对规则尤其是情境关键词的进一步解释。            \\
+% \bottomrule
+
+
+%% 优化版本
+% \toprule
+% \textbf{Challenges} & \textbf{Description} & \textbf{Examples} \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{Understanding User Language}} \\
+% Vague Concepts &  用户使用的概念不能准确映射到机器表达式，需要机器理解并找到相关detector。  & "在工作"可能同时与时间、地点、APP都有关 \\
+% Incomplete Semantics & 用户会省略情境信息。 & "这种情况下" \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{Providing Comprehensive Interface}} \\
+% Explanatory Affordance & 用户需要机器规则的自然语言解释，而且在机器不能做到时提供提示。 & \\
+% Concept-level Controls & 用户大多数时候需要在概念层面上修改，而较少会在表达式上修改。 & 用户想remove"上午跑步时"中的"上午" \\
+% \bottomrule
+
+% 润色版本
+% \toprule
+% \textbf{Challenges} & \textbf{Description} & \textbf{Examples} \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{Understanding User Language}} \\
+% Ambiguity in Context Expressions &  Users may employ vague or ambiguous terms that are difficult to convert into machine-readable boolean expressions.  & \quotes{At work} could refer to being engaged in work-related activities, being physically present at the workplace, or using work-related apps. \\
+% Omission of Context Information & Users may inadvertently leave out critical context information. & Users might say \quotes{in such situations} without specifying what the situation is, or mention a service without indicating the relevant contextual conditions. \\
+% \midrule
+% \multicolumn{3}{l}{\textbf{Providing Comprehensive Interfaces}} \\
+% % Explanatory Affordance & Users require natural language explanations of machine expressions and possible failures. & Users want to know how a specific context is recognized by the machine and require feedback when the system fails to construct machine expressions for certain contexts. \\
+% Explanatory Affordance & Users require natural language explanations of machine expressions and possible failures. & Users want to understand the meaning of \texttt{nearby phone number > 0} through natural language (the presence of nearby phones indicates potential human presence); users expect feedback when the system cannot detect conditions like \quotes{an unattended item}. \\
+% Concept-level Controls & Users need the ability to make modifications at the conceptual level, in addition to modifying Boolean expressions. & Users want to remove \quotes{morning} from \quotes{running in the morning} or add a condition like \quotes{listening to music}. \\
+% \bottomrule
+
+% 删除中间列
+\toprule
+\textbf{Challenges} & \textbf{Examples} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Understanding User Language}} \\
+Ambiguity in Context Expressions & \quotes{At work} could refer to being engaged in work-related activities, being physically present at the workplace, or using work-related apps. \\
+Omission of Context Information & Users might say \quotes{in such situations} without specifying what the situation is, or mention a service, such as simply stating \quotes{mute}, without indicating the relevant contextual conditions. \\
+\midrule
+\multicolumn{2}{l}{\textbf{Providing Comprehensive Interfaces}} \\
+Explanatory Affordance & Users want to understand the meaning of \texttt{nearby phone number > 0} through natural language (potential human presence); users expect feedback when the system cannot detect conditions like \quotes{an unattended item}. \\
+Concept-level Controls & Users want to remove \quotes{morning} from \quotes{running in the morning} or add a condition like \quotes{listening to music}, even if these concepts may not directly correspond to preset detectors. \\
+\bottomrule
+
+
+  \end{tabular}
+\end{table*}
+
+
+
+% 备注：不仅仅是一个semantic gap的语言上的问题，机器本身的感知能力集合和用户的感官就是不同的
+
+% background：终端用户构建个性化情境系统，我们以用户跟助手沟通这个例子作为实验的媒介
+
+6个参与者一共做了30个情境任务。
+30个任务中仅7次是用户在助手第一次回复后直接确认（没有询问或修改），有19次用户协作修改了情境条件，有2次用户修改了服务，有7次用户询问了情境条件的具体含义。
+我们发现，在用户通过机器助手automate自己的手机时，往往能够很清楚地描述自己所需要的服务，或者人类wizard很容易能够找到对应的服务。
+然而，wizard与用户在沟通情境条件时存在诸多挑战，我们在表\ref{tab:challenges}中做了整理并提供了examples。
+其中包括understanding user language和providing comprehensive interfaces两个方面的挑战。
+
+% \subsection{Understanding User Language}
+
+在输入环节，理解终端用户在情境内的语言存在两个挑战：
+
+\textbf{Ambiguity in Context Expressions}: users may employ vague or ambiguous terms that are difficult to convert into machine-readable boolean expressions.
+在实验过程中，人类wizard需要利用了自己的理解能力，来从用户的模糊表达中找到可能相关的机器布尔表达式。
+% 例如，对\quotes{at work}的interpretation既可以考虑工作的时间，也可以考虑工作的地点等。
+这意味着机器助手首先需要具有较强的语言理解能力，同时能够将high-level的自然语言与low-level的context detectors做连接。
+同时，由于用户语言所对应的机器表达式并不唯一，最优结果取决于用户的个性化特点，因此机器允许用户对生成结果的进一步修改也很重要。
+
+\textbf{Omission of Context Information}: users may inadvertently leave out critical context information.
+由于用户了解wizard助手具有一定的情境感知能力，they 有时会省略部分或全部的情境条件的描述，例如只说服务指令，或者用带有指代（例如\quotes{在这种情况下}）的情境描述。
+用户同样comment说这种方法确实能够降低语言表达的成本，更加自然。
+这说明了机器助手结合情境数据来理解用户的语言的必要性。
+
+% \subsection{Providing Comprehensive Interfaces}
+
+在反馈和后续交互环节，给用户提供comprehensive interfaces也有两个挑战：
+
+\textbf{Explanatory Affordance}: users require natural language explanations of machine expressions and possible failures.
+实验过程中，Users want to know how a specific context is recognized by the machine，而wizard需要利用自己的专家知识来提供用户可理解的解释。
+这意味着，机器助手需要拥有对low-level机器规则，尤其是其中多种detector构成的布尔表达式，解释为high-leve的用户关心的语言的能力。
+同时，users require feedback when the system fails to construct machine expressions for certain contexts.
+这需要机器助手对系统的情境感知能力边界具有清晰认识，能够判断某个用户语言输入所指代的情境超出了系统感知能力。
+
+\textbf{Concept-level Controls}: users need the ability to make modifications at the conceptual level, in addition to modifying boolean expressions.
+用户在修改情境条件时，一般不会使用与机器预定义detector一致的指令（他们也并不一定清楚机器的能力），而是以high-level concepts为单元去修改；极少数情况下，他们会关心concept所对应的机器boolean表达式。
+因此，机器需要给用户提供更加灵活的修改接口。
+
+
+% 实验中验证了人与机器对情境的理解具有显著相异的特点，这为bridge人与机器的情境理解gap提出挑战。
+% 整理出的challenges见表\ref{tab:challenges}。
+% 一方面，人对情境的理解是基于对自身长短期任务背景的认识之上的，而且往往是潜意识层面与有意识层面、具象化条件与抽象化概念相混合的；
+% 另一方面，机器对情境的理解往往来自于研发人员的有限建构，难以准确而灵活地从噪声中分辨更有意义的特征。
+
+% 下面是对challenges的解释。
+
+% 弥合人与机器情境理解的鸿沟是比较困难的。从用户角度出发，其往往难以清晰完整地传达信息：
+% \begin{itemize}
+%     \item 在情境中，用户对情境的表达是不完备的，往往会省略很多信息。
+%     \item 用户不一定按照IF-THEN的完整逻辑来描述需求。
+%     \item 用户不会将情境表达为机器变量的表达式，往往是抽象的模糊的概念；用户对情境（IF）的描述的temporality也是模糊的，既可能是state，也可能是event
+%     \item 用户对手机的感知能力不了解，需要额外交互来了解确认机器生成的结果，并进行必要的修正
+% \end{itemize}
+
+% 从机器角度来看，其没有与人类相称的通用智能从丰富的背景中认识情境，而且往往缺乏充分的信息：
+% \begin{itemize}
+%     \item 只使用自身的sensor，得到的情境信息与用户所掌握的情境信息不匹配。
+%     \item 无法打通low-level和high-level语义
+% \end{itemize}
+
+
+\section{LangAware}
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{figures/personalized_cas.pdf}
+    \caption{Building personlized Context-Awawre Systems involves different layers of context abstraction and knowledge from both experts and end users.}
+    \label{fig:personalized_cas}
+\end{figure}
+
+
+受formative study的启发，we present LangAware，一个情境感知增强的自然语言对话方法，允许终端用户主动在情境内通过自然语言和GUI上的简单交互，协同构建个性化情境规则。
+借助LLM的自然语言理解能力，终端用户可以通过可理解的自然语言概念来与机器effectively交互，bridge the human-machine context gap。
+通过这种方式，终端用户可以不断教授机器，构建自己的个性化情境感知应用。
+
+
+% \subsection{Design Features}
+\label{sec:design}
+
+LangAware针对某一个具体的个性化情境感知系统，接入终端用户，让终端用户更方便地传递个性化知识。
+如图\ref{fig:personalized_cas}所示，我们将情境感知系统分解为sensor data、基于sensor data处理得到的atomic detectors、基于atomic detectors构成的Shared Contextual Concepts（我们提出的，下面展开讲）、和最终由它连接的所需要的服务这几个layers。
+其中，专家知识用于构建从sensor data到原子化context detectors的连接，编码该系统所具有的基础可解释的情境感知能力（带有语义label），作为后续构建情境应用的building block。
+而终端用户知识用于构建从context detectors到Shared Contextual Concepts的映射（情境规则中的情境条件，即IF的部分），以及从Shared Contextual Concepts到所需服务的连接（情境规则中的服务动作，即THEN的部分）。
+
+由于formative study中所观察到，人机之间主要在情境构建上存在gap。
+在服务方面，由于用户往往是在已知系统所能提供的服务的基础上去与机器助手沟通，因此可以较为简单地从通过语义相似度从既定列表中匹配符合用户表达的服务。
+而对于更加复杂的服务推荐等用户可能并不了解所有服务的场景下，人机语言沟通所存在的困难与人机在情境理解问题中的困难类似。
+因此，我们focus在context detectors到Shared Contextual Concepts的情境构建环节。
+
+我们考虑让机器助手具有语言以外情境的感知能力，让人类用户与机器助手在情境内通过自然语言沟通。
+为解决formative study中提出的挑战，我们进一步探讨LangAware中的重要design features。
+
+\subsection{Shared Contextual Concepts}
+\label{sec:SCC}
+
+人机沟通的一大问题是基于不同的情境感知能力，所构成的情境感知语义是不同的。
+人类使用的概念，和机器通过传感器detector变量组合的表达式，并不一定等同。
+但终端用户对情境的表达必须ground in情境感知系统可以支持的情境感知能力上。
+为解决formative study中提到的Explanatory Affordance挑战，we introduce human-machine Shared Contextual Concepts (SCCs)。
+具体而言，我们定义一个SCC是一个natural language phrase和机器布尔表达式的pair，phrase是对这个表达式的解释，表达式是将 phrase condition在机器能力上的具体描述（见图\ref{fig:teaser}中部和右部）。
+LangAware所生成的情境规则中，IF情境条件部分会由若干个这样的SCC通过“and”的方式连接。
+% 机器可感知的情境概念
+SCCs用来促进人机对情境的理解，是人类概念和机器表达式的中间媒介。
+它既是人类可理解的，同时也是基于机器的感知和理解能力所重新概括出来的。
+对于用户语言中不能被系统感知到的phrase，它们没有对应的表达式，也即不能构成SCC，这会在SCC生成过程中体现（见\ref{sec:context_generate}）并反馈给用户。
+
+% % 提供具体例子
+% 例如，用户说“在公司开线上会议”，可以表示为“time.hour >= 8 and time.hour <= 18 and gps\_location in ['Company Building'] and current\_app == 'Zoom'”，它同时考虑了用户的时间、地点和当前正在使用的APP。
+% % 例子结束
+
+在将情境规则解释给用户解释时，SCC中的自然语言phrase能够屏蔽机器表达式的细节，让用户关注high level的语义，这在规则中存在多个概念的情况下尤其有帮助。
+同时，这种设计具有可扩展性，SCC中的自然语言phrase既可以很抽象也可以很具体，这是自然语言天生所具有的flexibility；而随着未来情境感知系统能力的变化（例如增加新的detector）后，同样自然语言语义所对应的机器表达式会进行扩充。
+
+% 终端用户对情境的表达需要condition在情境感知系统可以支持的情境感知能力上。
+% 因此，我们要求情境感知系统需要具有原子化的人类可理解的情境变量作为building block。
+% 对于已有的一个情境感知系统，我们要求专家首先编码这个系统所具有的基础情境感知能力，该系统可以支持对这些基础变量状态值的detection，和这些变量发生变化事件的detection。
+% % TODO：专家定义情境变量
+% 我们找到3个对情境感知系统具有开发经验的专家，面向智能手机上的情境感知系统总结出了一个可感知的情境变量列表和常见服务能力。
+% 基于这些情境变量，我们将情境规则设计为主流TAP规则中的一个变种，Trigger-Condition-Action，即 IF event happens WHILE states satisfy conditions THEN apply action\cite{brackenbury_how_2019}。
+% 其中，event代表情境变量的变化，condition是情境变量的表达式，action是系统可支持的服务能力。
+% 之所以选择这种规则设计方式，是因为它很灵活，能够支持丰富的情况，也易于实现。
+% 其外，在面对海量时序数据的情况下，情境感知系统需要具有情境事件筛选和排序的能力，以找到更具有关注价值的情境变量。
+
+
+\subsection{Conversational Interface}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{figures/Interaction.png}
+    \caption{The interaction design of LangAware.}
+    \label{fig:interaction}
+\end{figure}
+
+从formative study中我们能够看到，即使是人类模拟的助手，也不能在一轮交互中生成完全符合用户意图的结果。
+用户需要在多轮交互中修改和检查机器生成的结果，不断align自己和机器对情境的理解。
+同时，formative study也提到需要给予用户Concept-level Controls。
+因此，LangAware基于所提出的SCC来构建自然语言对话界面，允许终端用户在多轮交互中创建和修改情境，生成情境规则。
+
+如图\ref{fig:interaction}所示，用户在情境内主动发起与LangAware的对话，LangAware会根据对当前的情境和用户语言输入反馈一个可交互界面。
+其中包括对生成contextual rule的自然语言解释，和这句解释中所涉及到的SCC。
+每个SCC显示为一个可选的checkbox，同时如果用户愿意也可以看到其所对应的具体机器布尔表达式。
+如果用户的语言输入中存在不可被感知的phrase，则界面上会提示这一信息。
+用户可以直接进一步对话来修改或补充SCC，或者所使用的服务，LangAware会根据已生成结果调整，然后重新发送一个修改后的结果。
+用户也可以通过自然语言询问情境规则中各个部分的含义，LangAware会回复对其自然语言的解释。
+最后，当用户对协作生成的情境规则满意时，可以点击confirm，或者cancel if not。
+
+基于这样的设计，我们希望用户尽可能地借助自然语言来有效生成和编辑情境规则，不受限于缺乏专业知识。
+同时，这种协作过程不仅让机器更贴近用户所意图表达的情境，也让用户不断地了解机器感知情境的能力，使得逐渐close the human-machine context gap。
+
+
+\subsection{Context Construction by Integrating Language and Contextual Data}
+\label{sec:context_generate}
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=\linewidth]{figures/system_v3.pdf}
+    \caption{The generation process of Shared Contextual Concepts. 绿色箭头代表是用户自然语言的数据流，黄色箭头代表情境感知的数据流，他们最终合并成为了Shared Contextual Concepts。蓝色框的步骤由LLM驱动。}
+    \label{fig:system}
+\end{figure*}
+
+LangAware根据用户的自然语言输入和即时情境数据，来生成符合用户的SCC。
+面对formative study中所发现的Ambiguity in Context Expressions的挑战，我们利用LLM强大的NLP能力来进行其中结构化信息的提取，将用户表达的语义转换为情境感知系统所能支持的变量表达式。
+而针对Omission of Context Information的挑战，我们需要用情境数据来补充，利用LLM所蕴含的语义连接能力来抽象成更具概括性的用户概念。
+
+具体而言，我们设计了如图\ref{fig:system}所示的生成流程。
+当用户在具体情境下向助手发起构建情境规则的请求时，LangAware首先通过情境感知系统中的detector models来获得用户当前情境下的情境状态值（例如当前的时间、地点、手机前台APP、用户正在进行的活动等）和近期的detector事件（例如收到新消息、地点变化、噪音变化等）。
+这些model是专家构建起来的计算模型，可以从传感器数据（不仅仅是硬件传感器，也包括图形界面、消息、社交媒体等其他形式的软件传感器）中识别具有语义的文本标签。
+这些模型既可能是深度的（例如利用神经网络从IMU时序数据计算用户的运动状态），也可能是白盒的（例如根据GPS坐标查找用户所在的地点信息），目前已经有大量的工作研究这类问题\cite{perera_context_2014,chen_deep_2021,ismail_fawaz_deep_2019,sarker_context-aware_2019}。
+然后，我们将情境状态取值转换为"变量名 = 取值"的文本，将短期内（例如5min）手机上可检测的事件用文本列表形式表达，每个事件包括事件名、事件变化内容和时间戳，其中时间戳描述为相对于当前时间的相对值（例如"2 min 35 sec ago"）。
+我们将上述文本连接起来，称为context detector results。
+
+我们生成步骤中的重要一步是context reconstruction。
+context detector results是对用户情境的low-level描述，但为了更准确地捕捉到符合用户意图的SCC，我们需要有一个high-level的综合情境描述。
+因此我们利用LLM将context detector results和user utterance结合起来，生成一段短的自然语言文本，猜测用户此时的situation。
+这一步之所以有效，既因为LLM所拥有的通用知识，也因为专家对detector变量进行了可解释的命名。
+
+接下来，我们分别对user utterance和context reconstruction description处理。
+我们从high-level的自然语言文本中抽取key phrases作为情境条件，首先通过detector selection找到每个phrase所对应的detector变量，然后根据所选择的变量expand出一个符合phrase语义的boolean expression。
+worth noting的是，如果某个phrase不能被感知到，detector selection的输出为空，这是我们后续反馈给用户的依据。
+此外，expression expansion的步骤利用了LLM的通用知识来推荐每个detector尽可能多的取值（例如运动包括running, cycling, jumping等）。
+语言和情境两个数据流生成的结果最终会合并为SCCs，填充到用户界面上。
+
+当用户第一轮输入的结果生成后，LangAware在用户后续对情境规则（无论是SCC还是服务）修改时会同时考虑已生成的规则。
+基于这样的设计，我们利用LLM连接了用户的自然语言语义和情境数据语义，对用户的输入意图进行了增强，始终让情境助手在更加完整的情境里与用户对话。
+
+
+
+% 针对用户的utterance，我们首先利用LLM将其重述为IF...THEN...的形式，取出其中IF即关于情境描述的部分，然后将其分解为若干个keywords；对于每个keyword，从当前的detector取值列表中找到与其语义相关的detectors，生成形如"'online meeting': 'current\_app = 'WeMeet'"的内容；最后，我们利用LLM所蕴含的通用知识，让它根据用户的IF描述，推荐每个keyword所对应的detector的其他可能取值，生成类似"'online meeting': 'current\_app in ['WeMeet', 'Zoom']'"的pair。此时，我们已经将用户的自然语言表达，转换成了若干个SCCs。
+% 在这个步骤中，LLM将用户自然语言ground到机器可实现的情境感知能力上。
+% 针对context raw labels，我们先让LLM发挥情境推理能力，生成一段自然语言来猜测用户当前的情境，然后从中提炼自然语言关键词。
+% 后续的步骤和对utterance的处理流程类似，我们用LLM找到与这些关键词对应的detector并扩充其表达式，生成基于情境数据推断的SCC。
+% 在这个步骤中，LLM将机器感知到的情境数据抽象到更高级的自然语言语义上。
+% 两个分支的结果最后merge为语义不重复的SCC，提供给用户界面供用户修改和确认。
+
+% 当用户第一轮输入的结果生成后，LangAware在用户后续对情境规则（无论是SCC还是服务）修改时会同时考虑已生成的规则。
+% 基于这样的设计，我们利用LLM连接了用户的自然语言语义和情境数据语义，对用户的输入意图进行了增强，始终让情境助手在更加完整的情境里与用户对话。
+
+
+
+% To bridge the human-machine context gap in building personalized context-aware systems,
+% 我们提出基于LLM增强对用户情境的理解，在终端用户的协同中定义情境规则。
+
+% 交互设计上，我们提出终端用户通过自然语言界面与助手交流。
+% 用户在某个情境内，向助手通过自然语言交流，助手根据用户的自然语言和当前的传感器情境给出理解当前情境下所生成的情境规则，并通过自然语言反馈给用户。
+% 用户根据助手返回的结果，给出进一步的修改意见，助手进一步给出结果。
+% 多轮交互后，直到用户得到满意的情境规则结果。
+
+% 情境感知系统与情境规则设计。
+% 终端用户对情境的表达需要condition在情境感知系统可以支持的情境感知能力上。
+% 因此，我们要求情境感知系统需要具有原子化的人类可理解的情境变量作为building block。
+% 对于已有的一个情境感知系统，我们要求专家首先编码这个系统所具有的基础情境感知能力，该系统可以支持对这些基础变量状态值的detection，和这些变量发生变化事件的detection。
+% % TODO：专家定义情境变量
+% 我们找到3个对情境感知系统具有开发经验的专家，面向智能手机上的情境感知系统总结出了一个可感知的情境变量列表和常见服务能力。
+% 基于这些情境变量，我们将情境规则设计为主流TAP规则中的一个变种，Trigger-Condition-Action，即 IF event happens WHILE states satisfy conditions THEN apply action\cite{brackenbury_how_2019}。
+% 其中，event代表情境变量的变化，condition是情境变量的表达式，action是系统可支持的服务能力。
+% 之所以选择这种规则设计方式，是因为它很灵活，能够支持丰富的情况，也易于实现。
+% 其外，在面对海量时序数据的情况下，情境感知系统需要具有情境事件筛选和排序的能力，以找到更具有关注价值的情境变量。
+
+% 基于LLM的情境规则生成。
+% 面对终端用户表达信息不充分的问题，我们的系统需要利用情境数据来作为用户表达语义的补充。
+% % TODO：补图
+% 因此，我们设计了如图所示的规则生成流程。
+% 首先，将当前情境感知系统所处理得到的情境标签组织为语言，结合用户的自然语言表达，由LLM重构一段对当前用户情境的描述。
+% 然后，我们分两条数据流处理：
+% 1. 将用户的自然语言进行逻辑解析，生成若干条"IF ... THEN ..."形式的自然语言规则。
+% 因为，用户表达的一个情境需求可能对应于多条规则。
+% 对于每条规则，我们利用IF部分来生成情境规则中的trigger和condition表达式，即情境的识别；利用THEN部分来生成action，即服务的执行。
+% 其中对于IF情境部分，我们将用户的表述拆解成若干条自然语言关键词，然后分别使用情境感知系统预定义的情境变量来构造关键词对应的表达式；如果用户的表述中明确指向了event，则利用用户指代的情境变量事件构造trigger。
+% 2. 利用所生成的情境描述，由LLM推荐用户表述中未提及的、跟当前情境有关的关键词，并基于这些关键词生成情境表达式。
+% 最后，我们对于每条IF-THEN规则，让LLM将上述两条数据流生成的关键词及其表达式进行去重合并，并按照重要性排序。
+% 我们将合并后的各关键词的表达式，和action中的服务调用做合法性检查和必要修正（修正变量名以应对LLM输出可能出现字符错误的情况）。
+
+
+% 我们的系统需要具有综合理解用户情境的能力，因此需要情境感知系统的
+
+% 面向终端用户表达不完备的问题
+% LLM对用户表述内容连接到可能的情境变量，辅助生成情境变量表达式。
+
+
+
+% 和formative study一样，我们的情境规则设计follow主流的TAP规则中的一个变种，即Trigger-Condition-Action: IF event happens WHILE states satisfy conditions THEN apply action\cite{brackenbury_how_2019}
+% 之所以选择这种规则设计方式，是因为它很灵活，能够支持丰富的情况，且在设备上易于实现。
+% 终端用户对情境的表达，既可能包括state，也可能包括event。
+% 用户表达的一个context需求可能对应于多条TAP规则。
+
+% 情境规则生成流程。
+% LLM对用户表述内容连接到可能的情境变量，辅助生成情境变量表达式。
+
+
+
+
+% \subsection{Implementation}
+
+% \begin{figure}[h]
+%     \centering
+%     \includegraphics[width=\linewidth]{figures/implementation.pdf}
+%     \caption{System scheme}
+%     \label{fig:implementation}
+% \end{figure}
+
+% 我们在安卓手机上实现了LangAware。
+% 如图\ref{fig:implementation}所示，它包括手机和remote server两个部分，其中包含对话界面、情境感知和规则生成三个模块。
+
+% 前端对话界面使用飞书机器人构建\footnote{Feishu Open Platform: \url{https://open.feishu.cn/}}。
+% 飞书APP会通过飞书服务器与我们构建的服务器进行HTTP双向通信，支持用户与我们构建的飞书Bot对话。
+% 用户可以在飞书APP中通过语音或文本的方式发起情境规则生成的请求，飞书APP将用户的文本或语音转换成的文本，发送到我们的服务器。
+% 我们的助手以消息卡片的方式回复用户，消息卡片上包含说明文本，用于选择SCC的checkbox控件，和用于确认或取消的button控件。
+% 如果用户在消息卡片UI上的交互，助手会就地更新卡片内容；如果用户发送新的文本消息，无论是查询或修改，我们都会发送新的消息卡片作为回复。
+
+% 情境感知模块包括一个常驻用户手机后台的库，和一个与它建立Socket.IO长连接的服务端组成。
+% 手机上情境库可以包括从传感器数据解析的情境detectors，并在服务端query的时候提供：当前各个情境detector的状态，和过去一段时间内情境detector发生显著变化的事件。
+% % TODO：完整列表在附录里列出
+% 情境detectors包括当前的时间、地点、activity、noise、app、message等，完整列表参见附录中的表\ref{tab:detectors}。
+% % date,
+% % time,
+% % GPS location（labelled building names on campus），
+% % % location text description（由高德地图支持\footnote{Amap Locate SDK: \url{https://lbs.amap.com/product/locate}}），
+% % activity（基于IMU数据的深度模型，能够识别static、walking、running、cycling、others），
+% % noise in db（麦克风连续采集2秒平均值），
+% % audio device type（存在这些取值"speaker", "wired\_headphones", "wired\_headset", "bluetooth", "usb\_headset", "unknown"），
+% % audio playing（是否在播放音频，通过录屏权限得到），
+% % audio stream type（"media", "voice\_call", "ring"），
+% % current volume setting of media, voice call, notification, ring, alarm，
+% % current APP，
+% % network state（WiFi、热点或无连接），
+% % connected WiFi name，
+% % network latency，
+% % screen orientation，
+% % volume setting，
+% % audio output device，
+% % whether playing audio，
+% % microphone detected decibels，
+% % nearby PC number (via Bluetooth scanning)，
+% % latest message。
+% 最近的情境事件包括5min内上这些detector取值的变化事件，对离散变量而言是离散值的改变，对连续变量而言是超过阈值的显著变化事件。
+% 其中，对于消息而言会提供近期的新消息接收和移除事件。
+
+% 情境规则生成在remote server上实现，包括情境条件和服务映射两部分。
+% 情境条件部分是一系列SCC，由自然语言keyword和其对应的布尔表达式构成；每个布尔表达式由所有已定义的情境detector（见附录表\ref{tab:detectors}）及\texttt{content\_related\_to()}（见\ref{sec:SCC}）组合的布尔表达式构成，符合Python语法。
+% SCC的生成参考\ref{sec:design}提出的设计。
+% % TODO：服务部分怎么说
+% 服务action部分既可以从我们预定义好的服务API（包含调整音量、调整新收到消息的提醒模式、调整来电模式、切换网络等）中选择，也可以由LLM自己生成一个API，它也符合Python函数调用语法。
+% 我们使用ChatGPT API 中的 \texttt{gpt-3.5-turbo-0301} model\footnote{ChatGPT API: \url{https://openai.com/blog/introducing-chatgpt-and-whisper-apis}}作为我们的driving LLM，因为它是目前在follow instruction上能力较强的LLM，且不会动态更新。
+% 我们以chat的形式，在每个prompt中提供若干examples。
+% 这些prompts经过我们经验性地测试，以尽可能支持formative study中的cases。
+
+
+
+
+\section{Evaluation}
+
+% \subsection{Use Case Simulation}
+
+% 为了验证我们的系统在情境规则生成上的能力，我们采集了真实世界的情境感知数据，并配合设计的自然语言utterance，来生成情境规则。
+
+为了验证系统的SCC与规则生成能力及其可用性，我们在安卓手机上实现了LangAware，并招募被试在真实情境下、结合实时感知的传感器数据，以自然、真实的方式尝试生成规则。
+为了验证情境信息对规则生成的增强作用，我们同时实现了不接受传感器数据输入的baseline版本，并采用within-subject设计请所有被试使用两个版本的助手。
+
+\subsection{Implementation}
+
+LangAware和baseline都使用飞书机器人\footnote{Feishu Open Platform: \url{https://open.feishu.cn/}}构建前端对话界面，用户既可以通过打字也可以通过语音输入文本。
+飞书机器人由我们的remote server控制，它同时与我们手机上后台运行的情境库连接。
+情境规则生成在remote server上实现，包括情境条件和服务映射两部分。
+情境条件部分是一系列SCC，其中布尔表达式为Python语法，所使用的情境detector变量见附录表\ref{tab:detectors}）。
+% 解释content_related_to
+此外，相对于处理非自然语言的detector，我们新增一个面向自然语言的detector：\texttt{content\_related\_to(content, keywords)}，它的含义是判断\texttt{content}是否与\texttt{keywords}这个列表中所蕴含的关键词有关。
+例如，对于“广告消息”，可以表示为"\texttt{content\_related\_to(new\_message.content, ['advertisement'])}"。
+服务action部分既可以从我们预定义好的服务API（包含调整音量、调整新收到消息的提醒模式、调整来电模式、切换网络等）中选择，也可以由LLM自己生成一个API，它也符合Python函数调用语法。
+我们使用ChatGPT API 中的 \texttt{gpt-3.5-turbo-0301} model\footnote{ChatGPT API: \url{https://openai.com/blog/introducing-chatgpt-and-whisper-apis}}作为我们的driving LLM，因为它是目前在follow instruction上能力较强的LLM。
+
+与LangAware相比，baseline版本没有用户语言输入时的情境数据，即将图\ref{fig:system}中下方黄色箭头所表示的情境数据通路删去。
+
+
+\subsection{Participants}
+
+我们招募了16个被试（与formative study中的被试不同），请他们在真实情境下，使用我们开发的情境助手进行体验。
+其中男性与女性被试各8名，被试年龄在18——27岁间。
+整体实验用时40分钟到1小时。
+Each participant is compensated for their time.
+
+我们请被试在实验前汇报他们对IF-THEN自动化编程（例如IFTTT）的经验。仅有2位被试表示使用过相关工具、另有4位被试表示有所了解但从未使用过。用户表示未使用的原因主要是使用成本较高而实际受益较低。
+
+\subsection{Procedure}
+
+我们的实验分为两个stage。
+
+第一个stage请终端用户在真实场景下使用我们的系统。为了避免机型差异带来的工程问题，我们请被试统一使用我们提供的安卓手机。
+我们首先为用户介绍我们系统的功能与使用方式。
+我们预设了四个典型大学校园情境中的12个任务。我们为每位被试随机分配了4个有切身体验的任务，其中每两个任务在同一地点完成，并在对应的情境下用自然语言分别向情境感知助手与baseline助手简要表达需求（每位被试使用两版本助手的先后顺序一致，所有被试的使用先后顺序balance）；继而通过点击选择SCC，或者通过增加表述来增加新的SCC，抑或通过语言问询了解SCC的具体内涵。在确认无误后完成规则生成。
+在用户操作过程中，系统会记录用户的交互方式、交互轮次与交互时间；每完成一项任务后，我们请被试分别对两个版本的助手使用体验进行评价，包括：
+\begin{itemize}
+    \item 使用该助手在精神上有多么费力？
+    \item 使用该助手在体力上有多么费力？
+    \item 与该助手交互在时间上有多紧促或仓促？
+    \item 您认为该助手理解您意图的能力如何？ 
+    \item 您认为该助手最终生成的结果令人满意
+\end{itemize}
+
+在每位被试完成所有任务后，我们请被试对两个助手的总体体验进行评价，包括：
+\begin{itemize}
+    \item 使用该助手有多大程度上增加了您对其情境感知能力的了解？
+    \item 学习如何使用该助手有多容易？
+    \item 使用该助手生成情境规则有多容易？
+    \item 您未来再次使用该助手的可能性有多大？
+\end{itemize}
+
+我们也与每位被试进行访谈，了解其感知的思考与表达难度；是否理解SCC的表述、是否存在助手理解偏差；是否关注SCC对应的传感器表达式、是否能理解、是否想要编辑；以及其他感受与评价。
+
+第二个stage请三位对设计和开发情境感知系统有经验的专家对用户实验中LangAware所产生的SCC进行评估，并为每一SCC取三个评估分数的均值。专家参考传感器取值列表与用户表达，针对从机器表达式到对应SCC的充分性（表达式成立时推出SCC成立）与必要性（SCC成立时推出表达式成立）进行评估；参考api列表为规则中的action部分的函数选择与参数生成的准确性进行评估。
+
+
+\subsection{Tasks}
+
+我们预设了四个典型的校园情境，在每个情境下预设了若干规则生成任务。具体包括：
+\begin{itemize}
+    \item 安静的、周围有人学习的图书馆/自习室：休闲看视频时手机不要突然外放出声音；戴着耳机使用专注APP时自动播放轻音乐；蓝牙耳机突然断开连接时不要外放声音；屏蔽广告通知以免干扰学习。
+    \item 嘈杂的操场：戴着耳机边听音乐边跑步时不要被非私聊消息打扰；进入操场开始跑步时自动进行运动打卡记录，停止运动时自动结束记录。
+    \item 有/无室友在的宿舍：来自老师的消息响铃提醒；大声提醒外卖相关消息；有早课时确保闹钟打开；宿舍有其他人在时视频不要外放声音。
+    \item 嘈杂的食堂：收到消息时要响铃并振动；听音乐或打电话时要调高音量。
+\end{itemize}
+此外，若用户在预设情境中并无相应预设任务的实际生活经验，我们允许用户根据自身情况调整预设任务，或者提出自身有真实需要的任务。我们通过这种方式支持了诸如“在自习室玩手机时提醒我好好学习”等用户提出的任务。
+
+\subsection{Results of LangAware}
+
+\subsubsection{Evaluation of generated rules}
+
+    在16位被试进行的64项任务中，有56项即87.50\%的任务经用户确认成功完成生成。因为我们的实验是在真实情境下展开，而且允许用户基于内心实际需求、在感受到生成成本高于规则受益时自由地终止生成，因而这一成功率体现出系统的实用性。
+
+    经专家评估，在成功生成的规则中，系统生成的SCC对应的表达式有着4.50/5 (SD=0.77)的充分性（表达式成立时推出SCC成立）和4.50/5 (SD=0.71)的必要性（SCC成立时推出表达式成立）；系统生成的action有4.70/5 (SD=0.54)的准确性评价。
+    这表明高层次的用户概念比较准确地映射到了低层次的机器传感器，而且在真实环境中可以通过生成的传感器表达式有效检测对应的用户概念是否成立。
+    也即SCC有效地打通了用户高层语义与机器低级语义，实现了用户概念与机器传感器的有效映射。
+
+    系统生成的355个SCC中有195个即60.00\%涉及多传感器的组合、或者同一传感器的多取值条件组合，体现出良好的抽象性与概括性。这些具概括性的SCC平均获得了专家4.41/5 (SD=0.82)的充分性平均与4.37/5 (SD=0.76)的必要性评价，虽因生成难度提高总体效果低于可直接获取当前取值的一一映射情况，但依然有较好的抽象概括的准确性。
+    
+    （不是简单地根据当前情境直接获取）
+\subsubsection{Collaboration}
+
+    成功生成规则的56个实例平均交互用时78.50s (SD=50.11)。
+    在这些任务中，涉及到的82次修改操作中有67个即81.71\%属于界面点击修改操作(提交时每项SCC选中状态的变化计为一个点击操作)，有15个即18.29\%属于自然语言修改操作（除首次输入外，每一次发送文字消息计为一个语言修改）。
+    绝大多数修改操作通过界面上的点击操作完成，体现出LangAware系统设计与界面设计很好地描述了任务特征，降低了用户交互的难度与成本。
+    成功生成规则的56个实例的操作次数分布如图\ref{fig:modification}。其中46个也即82.14\%的实例通过2次以内的修改操作成功完成了合意的SCC及情境管理规则生成，体现出本系统collaboration的高效性。存在a special case，被试P7在初次使用时未能充分理解系统使用方式，在第一项任务中进行了9次修改操作，但其后三项任务修改操作次数依次为4,2,0。
+    
+     \begin{figure}
+        \centering
+        \includegraphics[width=\linewidth]{figures/results_modification0.png}
+        \caption{Distribution of tasks over modification number.}
+        \label{fig:modification}
+    \end{figure}   
+    
+\subsubsection{Subjective feedback}
+
+    如图\ref{fig:subjective}所示，用户主观评价体现了系统的良好可用性。
+    一方面，被试对系统意图理解能力的评价均值为5.56/7(SD=0.13)，对生成规则结果的满意度评价均值为5.70/7 (SD=0.12)，体现了系统的可行性与有用性。
+    另一方面，被试对系统易学性的评价均值为5.06/7 (SD=0.37)，对系统易用性的评价均值为5.06/7 (SD=0.27)；对使用系统时的低思考成本与低操作成本评价均值分别为5.44/7 (SD=0.20)和6.09/7 (SD=0.18)，这体现了系统良好的可用性。
+
+    此外，用户认为使用本系统完成四项任务后，对系统感知能力有了更好了解(mean=5.25/7, SD=0.17)，且若系统落地应用，愿意再次使用(mean=5.56/7, SD=0.23)。这表明我们的系统对提升用户对机器能力的了解、弥合人机情境理解鸿沟有可观的帮助，能够为用户提供价值。
+    
+    \begin{figure*}
+        \centering
+        \includegraphics[width=\linewidth]{figures/results_subjective2.png}
+        \caption{Subjective Ratings of Baseline and LangAware}
+        \label{fig:subjective}
+    \end{figure*}
+
+\subsection{Effect of context augmentation}
+        
+    加入传感器信息后，规则生成的成功率从68.75\%提升到87.50\%。虽然baseline版本的平均交互用时为43.04s (SD=27.72)且总计涉及19次修改操作均低于LangAware，但Baseline版本中仅有10.53\%的修改操作属于界面点击操作，高达89.47\%的修改操作通过自然语言完成。结合其较低的规则生成成功率，可以说明Baseline版本仅根据用户表述生成SCC可能缺少必要信息（即便用户在开始生成前亦未想到，但在看到生成的规则后发现问题）；而且补充这些必要信息的成本相对较高，以至于相对LangAware中更多的用户选择了放弃完成规则生成。
+
+    用户主观评价中也体现出加入传感器信息后的体验提升，如图\ref{fig:subjective}。我们使用Wilcoxon符号秩检验助手版本对不同指标的影响，结果显示采用考虑情境信息的LangAware后，用户的对低思考成本（$W = 106.000$，$p = 0.022 \le 0.05$）与低操作成本（$W = 90.000, p=0.025 \le 0.05$）的评价显著提升，用户反馈的系统意图理解准确度（$W = 122.500$，$p = 0.002 \le 0.05$）与最终生成规则的满意度（$W = 130.500$，$p = 0.001 \le 0.05$）显著提升。此外，用户在完成所有任务后，关于使用系统后增强对机器感知能力的了解（$W = 107.500$，$p = 0.013 \le 0.05$）、以及若系统落地应用愿意再次使用（$W = 125.000$，$p = 0.001\le 0.05$）方面，LangAware版本也比Baseline版本有显著提升。
+
+    综合来看，这些提升表明基于传感器数据与LLM重构用户情境，有效补充了用户表达中可能缺失的重要信息，帮助用户以更低的思考成本生成更为完备周全的规则，从而更快、更准确、更有效地完成SCC与情境管理规则。
+    
+\subsection{Discussion}
+
+总体上，用户对本系统表示认可。在访谈中，大部分用户提到向助手表达的难度不大，可以以与人对话的方式去交流。
+大部分用户喜欢基于情境信息理解用户意图的助手，认为其可以补充自身没有想到、但又确实有需要的SCC，其带来的体验有时是超乎想象的。用户认为对自然语言phrase做选择、删减，比从零开始表达一个phrase要容易的多。
+
+LangAware不仅通过多样化的情境消除用户表达的模糊性从而实现个性化，也通过用户多样化的意图而充分实现了个性化。
+本次实验中的12项典型任务分别有至少5个至多6个被试完成实验。在同一情境、同一任务中，不同被试的不同表达生成了不尽相同的SCC，体现出不同的个性化特征：
+\begin{itemize}
+    \item 感知方式的个性化：在类似情境发挥作用的SCC可能因用户表达的不同而存在多样性。例如在避免打扰他人的同一任务下，被试P6表达“安静的公共场合环境下……”，生成的SCC通过地点处于公共场合且环境噪音低于60dB判断“安静的公共场合”；被试P15表达\quotesit{周围有人时……}，生成的SCC通过周围蓝牙设备数判断“周围有人”。
+    \item 传感器组合的个性化：同时存在的若干条件因用户表达的不同而组合出不同的SCC。例如在早上的操场上，戴着耳机边听音乐边跑步的同一任务下，被试P7表达“在我听音乐跑步的时候……”；被试P2表达“在操场跑步时……”；被试P1表达“戴耳机跑步时……”，相应地生成了不同的SCC。
+    \item 动态语义detector带来的个性化：由于文本相关内容判断的开放性，我们引入了通过调用语言模型完成文本相关性判断的detector，从而也在广义的感知方面引入了用户个性化。例如需要筛选重要信息的场合，不同的用户分别提出了通过判断发信人是否属于上级、同事、导师的SCC；被试P5提出通过判断消息内容是否与外卖相关的SCC从而避免错过外卖。
+    \item SCC名称的个性化：因用户心智模型与表达习惯的差异，许多传感器表达式完全一致但在不同用户处有不同的名称。例如gps\_position == "canteen A"的表达式，不同用户的说法有“在吃饭”、“在食堂”、“在餐厅”。
+\end{itemize}
+
+我们发现非专业用户在使用系统过程中很少关注SCC中的机器表达式部分。在专业用户中，也仅有部分用户表达了直接修改表达式的意愿；依然有部分专业用户认为直接修改表达式比较麻烦，愿意通过与助手的进一步交流来完成SCC的修改完善。
+虽然我们的系统支持用户通过自然语言询问SCC对应的传感器表达式及其实现方式，但在充分教学后，用户实验中很少有被试使用这一功能。
+这一方面表明本系统基于SCC的交互设计在有效隔离了机器细节的基础上实现了与用户的高效沟通，
+另一方面也为SCC对应传感器表达式的准确性提出了较高的要求，以便在缺乏用户检查的情况下最大程度保证可用。
+
+通过实验与用户访谈也发现了系统在实际应用中可能存在的问题。
+目前依然存在一些无法准确理解意图的情况。有用户认为在日常使用、尤其是忙碌时不方便表达意图和检查规则。也有用户对系统的可靠性表示关切，认为如果不能保证绝对可用就会影响使用意愿，因为担心在关键时刻出现问题带来巨大的负面影响。
+
+\section{Limitations and Future Work}
+
+目前的工作是对情境内通过自然语言构建个性化情境上的初步探索。
+
+% 感知不准的影响
+用户实验发现，如果手机上存在感知不准的detector会显著影响用户交互。
+例如手机GPS定位的不准确可能会影响地点的识别，从IMU数据中识别到的activity存在错误，等等。
+用户在发现手机并没有能力识别到自己切换了地点或错误识别了activity时，便没有信心和耐心继续配置情境中的服务。
+一方面，解决该问题需要专家开发更为准确的识别模型。
+另一方面，未来也可以进一步探索将终端用户在构建情境规则过程中所表达的知识作用到对识别模型的优化中。
+这对个性化detector的构建尤为重要，例如基于IMU数据和用户标注优化对个性化activity的识别。
+
+使用LLM的问题。
+LangAware在分析用户语言和情境数据时调用了多次LLM，而每次LLM调用的时间在秒级（少数情况超过20s），累加的时间会显著影响用户体验。
+因此，未来我们需要探索使用更快速的LLM。
+此外，LLM对输入token长度的限制也会影响prompt中exmaple的数量，继而影响LLM处理复杂任务的效果。
+因此在未来我们会考虑使用finetuned LLM来优化特定环节任务的效果。
+
+当前我们聚焦在用户初次进入情境时定义新的SCC及其构成的情境规则，尚未SCC在不同情境下不断积累和细化的情况。
+因此，在未来我们会考虑继续使用结合即时情境和自然语言对话的方法，帮助用户扩充已有SCC的机器表达式。
+另外，随着SCC的不断积累，不同SCC之间可能存在包含关系，建立具有层级关系的个性化概念网络是否能够帮助用户定义情境规则，也是一个值得探索的问题。
+
+我们的系统解决了人与机器的情境理解GAP，也即用户非电子信息专业人士的问题；
+但是尚未充分解决用户当下理解与理想方案的GAP，也即用户非专业设计师的问题。目前LangAware通过情境感知在一定程度上增强了用户的意图，但这依然是不充分的。
+这一问题一方面可能通过LLM蕴含的通用知识进行进一步的补足，另一方面可能可以通过在长期运行中逐步理解特定用户偏好、增强系统能力，从而为用户提供更多方面的帮助。
+
+
+% LLM怎么用通用知识解决个性化问题？
+
+
+\section{Conclusion}
+
+In this paper, we presented LangAware, a novel collaborative approach enabling end-users to construct personalized contexts in-situ through natural language. 
+Addressing the human-machine context gap, LangAware leverages large language models (LLMs) to semantically connect low-level sensor detectors with high-level natural language. We introduced Shared Contextual Concepts (SCCs) as a medium for human-machine dialogue, fostering mutual understanding and consensus.
+
+Through a user study conducted in real-life settings with 16 participants across 12 campus scenarios, we demonstrated LangAware's effectiveness with an average success rate of 88\% in defining contextual rules.
+LangAware outperforms the baseline in terms of success rate, user satisfaction, and other aspects, highlighting the effectiveness of incorporating in-situ contextual data for context collaboration.
+Additionally, users reported that the collaboration process with LangAware enhanced their understanding of the machine's capabilities.
+
+Our work contributes to the development of personalized context-aware applications in IoT scenarios, paving the way for future research on collaborative human-machine approaches.
+
+
+
+% In this paper，我们探索一种协作方法来帮助终端用户通过自然语言构建个性化情境。
+% 个性化是情境感知应用的核心，用户的场景、设备和需求都是各异的。
+% 让用户参与情境感知应用的构建是重要的，但there is a gap between 人机对于构建情境的理解。
+% 我们面向这一human-machine context gap，识别通过自然语言解决这个gap中实际存在的挑战。
+% 为解决这些挑战并弥合gap，我们提出LangAware，它允许终端用户在情境中通过自然语言（即时是模糊、不完整）对话，来协作构建情境规则。
+% LangAware在对话的同时考虑当下的情境数据，利用LLM来处理用户的多样表达，在语义层面连接传感器和自然语言。
+% 我们提出Shared Contextual Concepts作为人机对话的中间媒介，让机器在协同中不断靠近用户意图的同时，用户也能不断了解机器能力、达成一致。
+
+% TODO：根据实验数据更新
+% 我们在real-life settings下开展了16个被试的用户实验。
+% 实验结果表明，LangAware能够支持终端用户以87.5\%的成功率定义情境规则。
+% 同时，情境感知对用户语言输入的增强显著提升了成功率、降低了交互轮数，也提升了用户对结果的满意度。
+% 不同用户的多轮交互过程，以及所生成的SCC具有显著的个性化特征。
+% 用户主观反馈均表明，LangAware易学易用，也愿意为未来继续使用。
+
+% 我们的工作为IoT场景下终端用户构建个性化情境感知应用提供了有效方法。
+% TODO：其他展望。
+
