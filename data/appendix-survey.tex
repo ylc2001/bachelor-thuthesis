@@ -3,65 +3,53 @@
 \begin{survey}
 \label{cha:survey}
 
-\title{Title of the Survey}
+\title{Literature Review on the Background of Language Models and Cognitive Modeling Research}
 \maketitle
 
 
 \tableofcontents
 
 
-本科生的外文资料调研阅读报告。
 
 
-\section{Figures and Tables}
 
-\subsection{Figures}
+\section{Background of Large Language Models}
 
-An example figure in appendix (Figure~\ref{fig:appendix-survey-figure}).
+Language models predict the most likely output sequence given an input by modeling the probability of text sequences. In recent years, language models based on the transformer architecture \cite{vaswani2017attention} have seen continuous growth in terms of parameter size and amount of text data used to train the models. This results in the emergence of newer and more powerful large language models (LLMs). Examples include LaMDA \cite{thoppilan2022lamda}, PaLM \cite{anil2023palm}, OpenAI's GPT-3 model \cite{brown2020language}, the online large language model chat bot ChatGPT \cite{abdullah2022chatgpt}, and the latest GPT-4 model supporting multimodal input of text and images \cite{achiam2023gpt}. These models, characterized by their massive parameter counts (ranging from hundreds of billions to trillions), have demonstrated remarkable generalization capabilities, allowing them to adapt to new downstream tasks without the need for retraining.
 
-\begin{figure}
-  \centering
-  \includegraphics[width=0.6\linewidth]{example-image-a.pdf}
-  \caption{Example figure in appendix}
-  \label{fig:appendix-survey-figure}
-\end{figure}
+To have LLMs perform the required tasks on demand, users usually need to carefully craft natural language instructions, commonly referred to as prompts. Prompts can provide a few examples (few-shot examples) or just a task description without examples. Prompt engineering has become an increasingly important skill for effective interaction with large language models. A range of experiential prompt engineering techniques has been developed, offering reusable solutions \cite{white2023prompt}. The superior performance of LLMs on various new tasks indicates that during the learning process from large-scale corpora, they embed rich semantic knowledge within the model. The process of inputting prompts can thus be viewed as a way of extracting this embedded knowledge.
 
+LLMs bring new opportunities for human-computer interaction \cite{bommasani2021opportunities}. They can handle diverse natural language expressions from end-users and understand user intent more accurately, making it easier for users without specialized knowledge to build AI applications. 
 
-\subsection{Tables}
+\section{Cognitive Modeling Methods}
 
-An example table in appendix (Table~\ref{tab:appendix-survey-table}).
+With the advancement of information technology, there has been a growing interest in leveraging computers to assist teaching and improve teaching efficiency. Even before the advent of large language models in recent years, traditional statistical methods, machine learning, and more recently, deep learning models have been employed to assess students' knowledge, model their abilities, and predict their future performance. Knowledge Tracing (KT) and Cognitive Diagnosis (CD) are two significant research areas in this field. They aim to model and analyze students' learning processes and cognitive states, providing personalized teaching support and guidance to educators.
+
+Both of these areas are based on a fixed set of questions and a predefined division of knowledge points. The characteristics of each of these two approaches are summarized in (Table~\ref{tab:appendix-survey-table}).
 
 \begin{table}
   \centering
-  \caption{Example table in appendix}
-  \begin{tabular}{ll}
+  \caption{Characteristics of KT and CD}
+  \begin{tabular}{p{0.25\linewidth}p{0.75\linewidth}}
     \toprule
-    File name       & Description                                         \\
+    Method                & Description             \\
     \midrule
-    thuthesis.dtx   & The source file including documentation and comments \\
-    thuthesis.cls   & The template file                                   \\
-    thuthesis-*.bst & BibTeX styles                                       \\
-    thuthesis-*.bbx & BibLaTeX styles for bibliographies                  \\
-    thuthesis-*.cbx & BibLaTeX styles for citations                       \\
+    Knowledge Tracing     & Predict the likelihood of students correctly answering other questions based on their past performance.    \\
+    Cognitive Diagnosis   & To assess students' mastery of different knowledge points based on their problem-solving history.        \\
     \bottomrule
   \end{tabular}
   \label{tab:appendix-survey-table}
 \end{table}
 
+\subsection{Knowledge Tracing}
+The ability to impart knowledge through teaching is a critical aspect of human intelligence. Human teachers can observe students' knowledge levels and tailor their teaching to meet students' needs. With the rise of online education platforms, machines also need to track students' knowledge to customize learning experiences for them. This research problem is known as Knowledge Tracing (KT). Effectively solving the KT problem can unlock the potential of computer-aided educational applications, providing algorithmic solutions for intelligent tutoring systems, course learning, and learning material recommendation. Furthermore, from a broader perspective, the "student" in KT can be any type of intelligent agent, including humans and artificial intelligence agents. Thus, the potential of KT extends to any machine teaching application scenario that seeks to tailor learning experiences for intelligent entities like machine learning models\cite{abdelrahman2023knowledge}. KT is crucial for online learning platforms and students alike. First, KT models can develop personalized adaptive learning systems. Once the students' knowledge states are understood, learning systems can tailor more suitable learning plans for different students, teaching according to their proficiency levels. Second, students can better understand their learning processes and gradually focus more on mastering less familiar skills\cite{liu2019exploiting}.
 
-\section{Equations}
+Knowledge Tracing (KT) relies on modeling students' behavioral sequences to obtain their cognitive states and predict their future learning performance. The KT task aims to model students' knowledge states in real-time based on their historical learning behavior, thus predicting their future academic performance.
 
-An example equation in appendix (Equation~\eqref{eq:appendix-survey-equation}).
-\begin{equation}
-  \frac{1}{2 \uppi \symup{i}} \int_\gamma f = \sum_{k=1}^m n(\gamma; a_k) \mathscr{R}(f; a_k)
-  \label{eq:appendix-survey-equation}
-\end{equation}
+KT has been studied for decades, with early research dating back to the late 1970s. However, \citet{corbett1994knowledge} were the first to introduce the concept of "knowledge tracing," using Bayesian networks to simulate the student learning process, known as Bayesian Knowledge Tracing. Since then, more researchers have focused on KT-related studies. Many logical models have been applied to KT, including Learning Factor Analysis and Performance Factor Analysis. In recent years, deep learning has increasingly been applied to KT tasks due to its powerful feature extraction and representation capabilities, as well as its ability to uncover complex structures. For example, Deep Knowledge Tracing introduced Recurrent Neural Networks (RNN) into KT tasks and was found to significantly outperform previous methods. Subsequently, by considering various features of learning sequences, more approaches have introduced different types of neural networks into KT tasks. Additionally, due to practical application requirements, many variants of KT models have been continually developed, and KT has been widely applied in various educational scenarios\cite{liu2021survey}.
 
-
-\section{Citations}
-
-Example\cite{dupont1974bone} citations\cite{merkt1995rotational} in appendix
-\cite{dupont1974bone,merkt1995rotational}.
+\subsection{Cognitive Diagnosis}
+In the field of intelligent education systems, Cognitive Diagnosis (CD)\cite{liu2023new} is a fundamental and crucial task that aims to measure students' mastery of specific knowledge concepts through the assessment of their performance and predictive processes. CD has numerous potential applications, including computer adaptive testing, targeted training, and practice question recommendation systems. Typical CD systems generally involve a question-concept matrix (also known as a Q-matrix), annotated by experts to represent which knowledge, concepts, or abilities are involved in each practice question. Most CD models rely on fully annotated Q-matrices provided by domain experts to train models, with these studies focusing on enhancing the mining process of response records to achieve better diagnostic results. This feature also contributes to the limitations of this approach, as lableing the Q-matrix for a large set of problems is a labor-intensive process.
 
 
 % 默认使用正文的参考文献样式；
