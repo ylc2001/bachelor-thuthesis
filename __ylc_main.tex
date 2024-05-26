@@ -39,12 +39,6 @@
 % 目录
 \tableofcontents
 
-% 插图和附表清单
-% 本科生的插图索引和表格索引需要移至正文之后、参考文献前
-% \listoffiguresandtables  % 插图和附表清单（仅限研究生）
-\listoffigures           % 插图清单
-\listoftables            % 附表清单
-
 % 符号对照表
 % \input{data/denotation}
 
@@ -62,16 +56,15 @@
 % 其他部分
 \backmatter
 
+% 插图和附表清单
+% 本科生的插图索引和表格索引需要移至正文之后、参考文献前
+% \listoffiguresandtables  % 插图和附表清单（仅限研究生）
+\listoffigures           % 插图清单
+\listoftables            % 附表清单
+
 % 参考文献
 \bibliography{ref/refs}  % 参考文献使用 BibTeX 编译
 % \printbibliography       % 参考文献使用 BibLaTeX 编译
-
-% 附录
-% 本科生需要将附录放到声明之后，个人简历之前
-\appendix
-% \input{data/appendix-survey}       % 本科生：外文资料的调研阅读报告
-% \input{data/appendix-translation}  % 本科生：外文资料的书面翻译
-\input{data/appendix-survey.tex}
 
 % 致谢
 \input{data/acknowledgements}
@@ -87,9 +80,16 @@
 % \statement[page-style=empty]
 % \statement[file=scan-statement.pdf, page-style=plain]
 
+% 附录
+% 本科生需要将附录放到声明之后，个人简历之前
+\appendix
+\input{data/appendix-survey}       % 本科生：外文资料的调研阅读报告
+% \input{data/appendix-translation}  % 本科生：外文资料的书面翻译
+% \input{data/appendix.tex}
+
 % 个人简历、在学期间完成的相关学术成果
 % 本科生可以附个人简历，也可以不附个人简历
-% \input{data/resume}
+\input{data/resume}
 
 % 指导教师/指导小组评语
 % 本科生不需要
